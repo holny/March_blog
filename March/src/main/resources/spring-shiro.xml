@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+    <!--  Shiro的Web过滤器 -->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <!-- Shiro的安全管理器，所有关于安全的操作都会经过SecurityManager -->
+        <property name="securityManager" ref="securityManager"/>
+        <!-- 系统认证提交地址，如果用户退出即session丢失就会访问这个页面 -->
+        <property name="loginUrl" value="/login"/>
+        <!-- 权限验证失败跳转的页面，需要配合Spring的ExceptionHandler异常处理机制使用 -->
+        <property name="unauthorizedUrl" value="/login"/>
+        <property name="filters">
+            <util:map>
+                <entry key="authc" value-ref="formAuthenticationFilter"/>
+                <entry key="logout" value-ref="logoutFilter" />
+            </util:map>
+        </property>
+        <!-- 自定义的过滤器链，从上向下执行，一般将`/**`放到最下面 -->
+        <!-- 注意权限这，拦截的是请求，转发貌似不拦截，重定向和客户端向服务器发起的请求才会拦截。因为转发是服务器内部动作。
+                所以Controller层return jsp是不会拦截的。比如这个项目/index.jsp不拦截，/index会拦截，因为是客户端发起/index请求，服务器返回index.jsp-->
+        <property name="filterChainDefinitions">
+            <value>
+                <!-- 静态资源不拦截 -->
+                /static/** = anon
+                /login.jsp = anon
+                /userlogin = anon
+                /logout = logout
+                /blog/page = anon
+                /summary = anon
+                /home = anon
+                /captcha = anon
+                /register = anon
+                /registercheck = anon
+                /blog/preview = anon
+                /user/profile = anon
+                /profile/** = anon
+                /image/** = anon
+                /like/** = anon
+                /my = user
+                /myinfo = user
+                /user = anon
+                /blog/serieslist/** = anon
+                /blog/typelist/** = anon
+                /blog/edit/** = roles[user]
+                /blog = roles[user]
+                /file/upload/** = user
+                /admin/** = user
+                /file/showPic/** = anon
+                /file/showBg/** = anon
+                /file/deletePic = user
+                /file/downloadPic/** = user
+                /blog/** = anon
+                <!-- Shiro提供了退出登录的配置`logout`，会生成路径为`/logout`的请求地址，访问这个地址即会退出当前账户并清空缓存 -->
+                /** = anon
+            </value>
+        </property>
+    </bean>
+
+    <!--自定义退出过滤器-->
+    <bean id="logoutFilter" class="org.apache.shiro.web.filter.authc.LogoutFilter">
+        <property name="redirectUrl" value="/login"></property>
+    </bean>
+
+
+    <!-- 1. SecurityManager 安全管理器 -->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <!-- 加载 CacheManager 缓存管理器 -->
+        <property name="cacheManager" ref="cacheManager"/>
+        <!-- 加载 Authenticator 身份认证管理器 -->
+        <property name="authenticator" ref="authenticator"/>
+        <!-- 加载 Authorizer 权限认证管理器 -->
+        <property name="authorizer" ref="authorizer"/>
+        <property name="sessionManager" ref="sessionManager"/>
+        <property name="realm" ref="userEmailRealm"/>
+        <property name="rememberMeManager" ref="rememberMeManager"/>
+    </bean>
+
+    <!-- 2. CacheManager 缓存管理器配置,需要加入ehcache的Jar包级配置文件-->
+    <bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+        <property name="cacheManagerConfigFile" value="classpath:ehcache.xml"/>
+    </bean>
+
+    <!-- 3. Authenticator 身份认证器配置，对应Realm的doGetAuthenticationInfo() -->
+    <bean id="authenticator" class="org.apache.shiro.authc.pam.ModularRealmAuthenticator">
+        <!-- 认证策略改为FirstSuccessfulStrategy只要有一个认证成功即可，只返回第一个认证成功的认证信息，其它的忽略。
+                默认的是AtLeastOneSuccessfulStrategy只要有一个认证成功即可，但将返回所有Realm身份认证成功的认证信息。
+                还有AllSuccessfulStrategy是所有Realm认证成功才算成功，且返回所有认证成功的认证信息。-->
+        <property name="authenticationStrategy">
+            <bean class="org.apache.shiro.authc.pam.FirstSuccessfulStrategy"></bean>
+        </property>
+    </bean>
+
+    <!-- 4. Authorizer 权限认证器配置，注意这里配置后，并且有权限认证动作时，才会调用Realm的doGetAuthorizationInfo()-->
+    <bean id="authorizer" class="org.apache.shiro.authz.ModularRealmAuthorizer">
+    </bean>
+
+    <!-- 5. Realm 实现 -->
+    <bean id="userEmailRealm" class="com.hly.march.realm.UserEmailRealm">
+        <!-- 是否启用缓存 -->
+        <property name="cachingEnabled" value="true"/>
+        <!-- 是否启用 Authenticator Caching 身份验证缓存 -->
+        <property name="authenticationCachingEnabled" value="true"/>
+        <!-- 缓存AuthenticationInfo信息的缓存名称,需要配置CacheManager -->
+        <property name="authenticationCacheName" value="authenticationCache"/>
+        <!-- 是否启用 Authorizer Caching 授权缓存,缓存AuthorizationInfo信息 -->
+        <property name="authorizationCachingEnabled" value="true"/>
+        <!-- 缓存AuthorizationInfo信息的缓存名称,需要配置CacheManager -->
+        <property name="authorizationCacheName" value="authorizationCache"/>
+        <!-- 指定加密算法和加密次数 -->
+        <property name="credentialsMatcher">
+            <bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+                <property name="hashAlgorithmName" value="MD5"></property>
+                <property name="hashIterations" value="5"></property>
+            </bean>
+        </property>
+    </bean>
+<!--    <bean id="userPhoneNumRealm" class="com.hly.march.realm.UserPhoneNumRealm">-->
+<!--        &lt;!&ndash; 是否启用缓存 &ndash;&gt;-->
+<!--        <property name="cachingEnabled" value="true"/>-->
+<!--        &lt;!&ndash; 是否启用身份验证缓存 &ndash;&gt;-->
+<!--        <property name="authenticationCachingEnabled" value="true"/>-->
+<!--        &lt;!&ndash; 缓存AuthenticationInfo信息的缓存名称 &ndash;&gt;-->
+<!--        <property name="authenticationCacheName" value="authenticationCache"/>-->
+<!--        &lt;!&ndash; 是否启用授权缓存，缓存AuthorizationInfo信息 &ndash;&gt;-->
+<!--        <property name="authorizationCachingEnabled" value="true"/>-->
+<!--        &lt;!&ndash; 缓存AuthorizationInfo信息的缓存名称 &ndash;&gt;-->
+<!--        <property name="authorizationCacheName" value="authorizationCache"/>-->
+<!--        &lt;!&ndash; 指定加密算法和加密次数 &ndash;&gt;-->
+<!--        <property name="credentialsMatcher">-->
+<!--            <bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">-->
+<!--                <property name="hashAlgorithmName" value="MD5"></property>-->
+<!--                <property name="hashIterations" value="5"></property>-->
+<!--            </bean>-->
+<!--        </property>-->
+<!--    </bean>-->
+
+    <!-- 6.1. SessionManager 会话管理器配置 -->
+    <bean id="sessionManager" class="org.apache.shiro.web.session.mgt.DefaultWebSessionManager">
+        <!-- 解决前端URL上会有JESSIONID Bug -->
+        <property name="sessionIdUrlRewritingEnabled" value="false"/>
+        <!-- 定义的是全局的session会话超时时间，此操作会覆盖web.xml文件中的超时时间配置 单位毫秒 -->
+        <!-- 当remember me时间大于这个global session时间时，超过这个session时间还是在网页上的，只不过是remember me身份-->
+        <property name="globalSessionTimeout" value="1800000"/>
+        <!-- 删除所有无效的Session对象，此时的session被保存在了内存里面 -->
+        <property name="deleteInvalidSessions" value="true"/>
+        <!-- 会话验证是否启用 -->
+        <!-- 需要让此session可以使用该定时调度器进行检测 -->
+        <property name="sessionValidationSchedulerEnabled" value="true"/>
+        <!-- 会话验证调度器 -->
+        <!-- 定义要使用的无效的Session定时调度器 -->
+        <property name="sessionValidationScheduler" ref="sessionValidationScheduler"/>
+        <!-- Session持久化DAO-->
+        <property name="sessionDAO" ref="sessionDAO"/>
+        <!-- 是否启用sessionIdCookie，默认是启用的 -->
+        <!-- 定义sessionIdCookie模版可以进行操作的启用 -->
+        <property name="sessionIdCookieEnabled" value="true"/>
+        <!-- 会话Cookie -->
+        <!-- 所有的session一定要将id设置到Cookie之中，需要提供有Cookie的操作模版 -->
+        <property name="sessionIdCookie" ref="sessionIdCookie"/>
+    </bean>
+
+    <!-- 6.2. Session ID生成器 -->
+    <bean id="sessionIdGenerator" class="org.apache.shiro.session.mgt.eis.JavaUuidSessionIdGenerator"/>
+
+    <!-- 6.3. Session DAO 继承EnterpriseCacheSessionDAO, 自定义的MySessionDAO有问题，待整合redis时尝试解决 -->
+    <bean id="sessionDAO" class="com.hly.march.realm.MySessionDAO">
+        <!-- 同时启用会话缓存,需要配置CacheManager-->
+        <property name="activeSessionsCacheName" value="shiro-activeSessionCache"/>
+        <property name="sessionIdGenerator" ref="sessionIdGenerator"/>
+    </bean>
+
+    <!-- 6.4. 会话验证调度器 配置session的定时验证检测程序类，以让无效的session释放 -->
+    <bean id="sessionValidationScheduler" class="org.apache.shiro.session.mgt.quartz.QuartzSessionValidationScheduler">
+        <!-- 设置session的失效扫描间隔，单位为毫秒 -->
+        <property name="sessionValidationInterval" value="180000"/>
+        <property name="sessionManager" ref="sessionManager"/>
+    </bean>
+
+    <!-- 7.1. rememberMe管理器配置 -->
+    <!-- 因为浏览器关闭后再打开浏览器发送后端的就不是上次的session id了，所以会话结束。
+            因此remember me 是依靠前端保存的cookie在勾选remember me后(后端token.setRememberMe(true))，把cookie保存在服务器。
+            因此关闭浏览器后，用户还能使用，不过这时就是remember me权限(user/ isRemembered()=true)，跟Authenticated有区别(authc/isAuthenticated()=true)。
+            显然Authenticated权限大于remember me权限，因为Authenticated是刚经过身份认证的(登录验证) -->
+    <bean id="rememberMeManager" class="org.apache.shiro.web.mgt.CookieRememberMeManager">
+        <!-- cipherKey是加密rememberMe Cookie的密匙，默认AES算法 -->
+        <property name="cipherKey" value="#{T(org.apache.shiro.codec.Base64).decode('4AvVhmFLUs0KTA3Kprsdag==')}"/>
+        <property name="cookie" ref="rememberMeCookie"/>
+    </bean>
+    <!-- 7.2. 会话Cookie模板   ，这个是默认模板，除了rememberMeCookie以外的cookie配置(还未验证) -->
+    <bean id="sessionIdCookie" class="org.apache.shiro.web.servlet.SimpleCookie">
+        <!-- 在Tomcat运行下默认使用的Cookie的名字为JSESSIONID -->
+        <constructor-arg value="sid"/>
+        <!-- 如果设置为true，则客户端不会暴露给服务端脚本代码，有助于减少某些类型的跨站脚本攻击 -->
+        <!-- 保证该系统不会受到跨域的脚本操作供给 -->
+        <property name="httpOnly" value="true"/>
+        <property name="maxAge" value="-1"/><!-- maxAge=-1表示浏览器关闭时失效此Cookie -->
+    </bean>
+    <bean id="rememberMeCookie" class="org.apache.shiro.web.servlet.SimpleCookie">
+        <constructor-arg value="rememberMe"/>
+        <property name="httpOnly" value="true"/>
+        <property name="maxAge" value="3600"/><!-- 单位秒。value=2592000= 30天 -->
+    </bean>
+
+
+    <!-- 10. 相当于调用SecurityUtils.setSecurityManager(securityManager) -->
+    <bean class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
+        <property name="staticMethod" value="org.apache.shiro.SecurityUtils.setSecurityManager"/>
+        <property name="arguments" ref="securityManager"/>
+    </bean>
+
+    <!-- 基于Form表单的身份验证过滤器,还未发现有什么用 -->
+    <bean id="formAuthenticationFilter" class="org.apache.shiro.web.filter.authc.FormAuthenticationFilter">
+        <property name="usernameParam" value="username"/>
+        <property name="passwordParam" value="password"/>
+        <property name="loginUrl" value="/login.jsp"/>
+    </bean>
+</beans>

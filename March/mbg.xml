@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE generatorConfiguration
+        PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN"
+        "http://mybatis.org/dtd/mybatis-generator-config_1_0.dtd">
+
+<generatorConfiguration>
+    <!-- mybatis逆向工程，可以根据数据库表自动生成Bean对象、Java接口及SqlMapper.xml配置文件 -->
+    <!-- 注意，如果用的Mac或Linux，路径地址是 ./src/main,而不是.\src\main-->
+    <!-- ${}有SQL注入风险，能用#{}就用。不过mybatis逆向已经自动设好了-->
+
+    <context id="DB2Tables" targetRuntime="MyBatis3">
+        <plugin type="org.mybatis.generator.plugins.SerializablePlugin" />
+        <!-- 生成时，不要伴随生成注释-->
+        <commentGenerator>
+            <property name="suppressAllComments" value="true" />
+        </commentGenerator>
+
+        <!-- 配置数据库连接 -->
+        <jdbcConnection driverClass="com.mysql.jdbc.Driver"
+                        connectionURL="jdbc:mysql://localhost:3306/blog_v1"
+                        userId="root"
+                        password="hly940320">
+            <property name="nullCatalogMeansCurrent" value="true"/>
+        </jdbcConnection>
+
+        <javaTypeResolver>
+            <property name="forceBigDecimals" value="false"/>
+        </javaTypeResolver>
+
+        <!-- 指定JavaBean生成的位置 -->
+        <javaModelGenerator targetPackage="com.hly.march.entity" targetProject="./src/main/java">
+            <property name="enableSubPackages" value="true"/>
+            <property name="trimStrings" value="true"/>
+        </javaModelGenerator>
+
+        <!-- 指定sql映射文件生成的位置 -->
+        <sqlMapGenerator targetPackage="mapper" targetProject="./src/main/resources">
+            <property name="enableSubPackages" value="true"/>
+        </sqlMapGenerator>
+
+        <!-- 指定dao接口生成的位置,mapper接口 -->
+        <javaClientGenerator type="XMLMAPPER" targetPackage="com.hly.march.dao" targetProject="./src/main/java">
+            <property name="enableSubPackages" value="true"/>
+        </javaClientGenerator>
+
+        <!-- table指定每个表的生成策略 -->
+        <!-- tableName指定表名，domainObjectName表示要生成的domain类名-->
+
+        <table tableName="user" domainObjectName="User">
+        </table>
+
+    </context>
+</generatorConfiguration>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:task="http://www.springframework.org/schema/task" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context
+         http://www.springframework.org/schema/context/spring-context.xsd
+           http://www.springframework.org/schema/mvc
+           http://www.springframework.org/schema/mvc/spring-mvc.xsd
+http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-4.1.xsd http://www.springframework.org/schema/util https://www.springframework.org/schema/util/spring-util.xsd">
+
+    <!-- SpringMVC的配置文件，包含网站跳转逻辑的控制，配置 -->
+    <!-- 开启扫描注解 -->
+    <context:component-scan base-package="com.hly.march" use-default-filters="false">
+        <!-- 只扫描控制器 -->
+        <context:include-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+    </context:component-scan>
+
+    <!-- 1、视图解析器对象，方便页面返回解析。 class类名是固定的-->
+    <bean id="internalResourceViewResolver" class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix" value="/WEB-INF/pages/"/>
+        <property name="suffix" value=".jsp"/>
+    </bean>
+
+
+    <!-- 上传文件 -->
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+        <property name="defaultEncoding" value="utf-8"/>
+        <!-- 最大内存大小 -->
+        <property name="maxInMemorySize" value="10240"/>
+        <!-- 配置文件上传的最大体积 10M -->
+        <property name="maxUploadSize" value="10240000"/>
+    </bean>
+
+
+    <!-- 两个标准配置 -->
+    <!-- 将springMVC不能处理静态资源的请求交给tomcat-->
+    <mvc:default-servlet-handler/>
+    <!-- 开启springMVC框架注解支持，映射动态请求,能支持springMVC更高级的一些功能，JSR303校验，快捷的ajax 。
+    mvc:annotation-driven只默认开启了三大组件，自定义类型转换器需要自己再打开-->
+
+    <!-- 注册RequestMappingHandlerMapping 和RequestMappingHandlerAdapter 两个bean。-->
+    <mvc:annotation-driven>
+        <!-- 配置MappingJackson2HttpMessageConverter，使后端数据库中null传到前端变为空字符串-->
+        <mvc:message-converters>
+            <bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+                <property name="objectMapper">
+                    <bean class="com.hly.march.converter.JsonObjectMapper">
+                        <property name="serializationInclusion">
+                            <!-- 对非空的数据不起作用 -->
+                            <util:constant static-field="com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL" />
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+        </mvc:message-converters>
+<!--        <mvc:argument-resolvers>-->
+<!--            <bean class="com.hly.march.handler.EmptyStringToNullModelAttributeMethodProcessor">-->
+<!--                <constructor-arg name="annotationNotRequired" value="true"/>-->
+<!--            </bean>-->
+<!--        </mvc:argument-resolvers>-->
+    </mvc:annotation-driven>
+
+<!--    &lt;!&ndash; 配置自定义Convert ， annotation-driven也需要加上 conversion-service="conversionService" &ndash;&gt;-->
+<!--    <bean id="emptyStringToNullConverter" class="com.hly.march.converter.EmptyStringToNullConverter"/>-->
+<!--    <bean id="conversionService" class="org.springframework.context.support.ConversionServiceFactoryBean">-->
+<!--        <property name="converters">-->
+<!--            <list>-->
+<!--                <ref bean="emptyStringToNullConverter"/>-->
+<!--            </list>-->
+<!--        </property>-->
+<!--    </bean>-->
+
+    <!-- 配置前端控制器，哪些静态资源不拦截 mapping表示所有请求路径以此开头的不拦截，location表示webapp目录下的哪些不拦截-->
+    <!-- 这里若配置了，静态资源还是显示404，则看web.xml配置没 servlet-mapping 为Default servlet来处理静态资源-->
+<!--    <mvc:resources location="/res/" mapping="/res/**"/>-->
+
+    <!-- 配置定时任务 -->
+    <task:annotation-driven scheduler="myScheduler"/>
+    <task:scheduler id="myScheduler" pool-size="3"/>
+
+    <!-- 8. 配置LifecycleBeanPostProcessor，可以自定的来调用配置在Spring IOC容器中shiro bean的生命周期方法 -->
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+    <!-- 9. 启用IOC容器中使用shiro的注解，但必须在配置了LifecycleBeanPostProcessor之后才可以使用 -->
+    <bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator" depends-on="lifecycleBeanPostProcessor"/>
+    <!-- 开启Spring AOC Shiro注解支持 -->
+    <bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor">
+        <property name="securityManager" ref="securityManager"/>
+    </bean>
+
+    <!-- 配置拦截器 -->
+    <!--  配置多个拦截器后,拦截器的启用顺序跟拦截路径无关，只跟这里的配置拦截器的顺序有关，
+        如下例子(先配置拦截器1)顺序：1.pre->2.pre->controller->2.post->1.post->success.jsp->2.after->1.after  -->
+    <mvc:interceptors>
+        <!-- 配置第一个拦截器-->
+        <mvc:interceptor>
+            <!-- 要拦截的方法-->
+            <mvc:mapping path="/**"/>
+            <!-- 不要拦截的方法-->
+            <!--            <mvc:exclude-mapping path=""/>-->
+            <!-- 配置拦截器对象 -->
+            <bean class="com.hly.march.interceptor.MyInterceptor1"/>
+        </mvc:interceptor>
+
+        <!-- 配置第二个拦截器 -->
+        <mvc:interceptor>
+            <!-- 要拦截的方法-->
+            <mvc:mapping path="/**"/>
+            <!-- 不要拦截的方法-->
+            <!--            <mvc:exclude-mapping path=""/>-->
+            <!-- 配置拦截器对象 -->
+            <bean class="com.hly.march.interceptor.MyInterceptor2"/>
+        </mvc:interceptor>
+    </mvc:interceptors>
+
+</beans>
